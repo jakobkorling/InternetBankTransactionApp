@@ -1,0 +1,8 @@
+[
+    { "recipient": "ICA", "classification": "Food" },
+    { "recipient": "Skanetrafiken", "classification": "Transport" },
+    { "recipient": "Netflix", "classification": "Entertainment" },
+    { "recipient": "Holy Greens", "classification": "Food" },
+    { "recipient": "IKEA", "classification": "Household" },
+    { "recipient": "Tivoli", "classification": "Entertainment" }
+]
