@@ -11,43 +11,69 @@ app.get("/", (req, res) => {
     res.send("Internet Bank Transaction API");
 });
 
+// Get one transaction by ID
+app.get("/transactions/:id", (req, res) => {
+    const id = Number(req.params.id);
 
-// Link transcations with classifications
+    if (Number.isNaN(id)) {
+        return res.status(400).json({
+            error: "Transaction ID must be a number"
+        });
+    }
+
+    const transaction = transactions.find((transaction) => transaction.id === id);
+
+    if (!transaction) {
+        return res.status(404).json({
+            error: "Transaction not found"
+        });
+    }
+
+    return res.status(200).json(transaction);
+});
+
+// Get all transactions
 app.get("/transactions", (req, res): void => {
     const { start, end } = req.query;
     let result = transactions;
+
     if (start || end) {
         const startDate = new Date(start as string);
         const endDate = new Date(end as string);
 
-        // Handle invalid dates
         if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
             res.status(400).json({ message: "Invalid date format" });
             return;
         }
-        // Handle cases where the start date is after the end date
+
         if (startDate > endDate) {
-            res.status(400).json({ message: "Start date must be before end date!"});
+            res.status(400).json({
+                message: "Start date must be before end date!"
+            });
             return;
-        } 
-        // Filter transcations by date
+        }
+
         result = transactions.filter((t) => {
             const transactionDate = new Date(t.date);
             return transactionDate >= startDate && transactionDate <= endDate;
         });
     }
-    
+
     const withClassification = result.map((t) => {
         if (t.amount < 0) {
-            return { ...t, classification: findClassification(t.recipient) };
+            return {
+                ...t,
+                classification: findClassification(t.recipient)
+            };
         }
+
         return t;
     });
 
     res.status(200).json(withClassification);
 });
 
-
+// Create transaction
 app.post("/transactions", (req, res) => {
     const { date, recipient, amount } = req.body;
 
@@ -83,7 +109,7 @@ app.post("/transactions", (req, res) => {
     res.status(201).json(newTransaction);
 });
 
-// Update transcations by id
+// Update transaction by ID
 app.put("/transactions/:id", (req, res): void => {
     const transactionId: number = parseInt(req.params.id);
     const transaction = transactions.find((t) => t.id === transactionId);
@@ -100,7 +126,7 @@ app.put("/transactions/:id", (req, res): void => {
 
     transaction.date = req.body.date || transaction.date;
     transaction.recipient = req.body.recipient || transaction.recipient;
-    transaction.amount = req.body.amount ?? transaction.amount;     
+    transaction.amount = req.body.amount ?? transaction.amount;
 
     if (transaction.amount < 0) {
         transaction.classification = findClassification(transaction.recipient);
@@ -108,7 +134,10 @@ app.put("/transactions/:id", (req, res): void => {
         transaction.classification = undefined;
     }
 
-    res.status(200).json({ message:"Transaction updated successfully", transaction});
+    res.status(200).json({
+        message: "Transaction updated successfully",
+        transaction
+    });
 });
 
 app.listen(PORT, () => {
