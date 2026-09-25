@@ -12,6 +12,42 @@ app.get("/", (req, res) => {
 });
 
 
+// Link transcations with classifications
+app.get("/transactions", (req, res): void => {
+    const { start, end } = req.query;
+    let result = transactions;
+    if (start || end) {
+        const startDate = new Date(start as string);
+        const endDate = new Date(end as string);
+
+        // Handle invalid dates
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            res.status(400).json({ message: "Invalid date format" });
+            return;
+        }
+        // Handle cases where the start date is after the end date
+        if (startDate > endDate) {
+            res.status(400).json({ message: "Start date must be before end date!"});
+            return;
+        } 
+        // Filter transcations by date
+        result = transactions.filter((t) => {
+            const transactionDate = new Date(t.date);
+            return transactionDate >= startDate && transactionDate <= endDate;
+        });
+    }
+    
+    const withClassification = result.map((t) => {
+        if (t.amount < 0) {
+            return { ...t, classification: findClassification(t.recipient) };
+        }
+        return t;
+    });
+
+    res.status(200).json(withClassification);
+});
+
+
 app.post("/transactions", (req, res) => {
     const { date, recipient, amount } = req.body;
 
@@ -47,6 +83,7 @@ app.post("/transactions", (req, res) => {
     res.status(201).json(newTransaction);
 });
 
+// Update transcations by id
 app.put("/transactions/:id", (req, res): void => {
     const transactionId: number = parseInt(req.params.id);
     const transaction = transactions.find((t) => t.id === transactionId);
