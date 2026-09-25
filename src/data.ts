@@ -23,5 +23,3 @@ export const findClassification = (recipient: string): string => {
     }
     return match.classification;
 };
-
-// console.log(findClassification("ICA"));
