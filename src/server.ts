@@ -1,6 +1,11 @@
 import express from "express";
-import { transactions, findClassification } from "./data.js";
+import {
+    transactions,
+    findClassification,
+    classificationsData
+} from "./data.js";
 import type { Transaction } from "./data.js";
+
 
 const app = express();
 const PORT = 3000;
@@ -167,6 +172,10 @@ app.delete("/transactions/:id", (req, res): void => {
     res.status(200).json({
         message: "Transaction deleted successfully"
     });
+});
+
+app.get("/classifications", (req, res) => {
+    res.status(200).json(classificationsData);
 });
 
 app.listen(PORT, () => {

@@ -26,3 +26,5 @@ export const findClassification = (recipient: string): ClassificationType => {
     return match.classification as ClassificationType;
 
 }; 
+
+export { classificationsData };
