@@ -140,6 +140,35 @@ app.put("/transactions/:id", (req, res): void => {
     });
 });
 
+// Delete transaction by ID
+app.delete("/transactions/:id", (req, res): void => {
+    const transactionId = Number(req.params.id);
+
+    if (Number.isNaN(transactionId)) {
+        res.status(400).json({
+            message: "Transaction ID must be a number"
+        });
+        return;
+    }
+
+    const transactionIndex = transactions.findIndex(
+        (transaction) => transaction.id === transactionId
+    );
+
+    if (transactionIndex === -1) {
+        res.status(404).json({
+            message: "Transaction not found"
+        });
+        return;
+    }
+
+    transactions.splice(transactionIndex, 1);
+
+    res.status(200).json({
+        message: "Transaction deleted successfully"
+    });
+});
+
 app.listen(PORT, () => {
     console.log(`Server is running on port: ${PORT}`);
 });
