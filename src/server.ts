@@ -12,6 +12,26 @@ const PORT = 3000;
 
 app.use(express.json());
 
+function isValidDate(date: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return false;
+  }
+
+  const parsedDate = new Date(date);
+
+  if (isNaN(parsedDate.getTime())) {
+    return false;
+  }
+
+  const [year, month, day] = date.split("-").map(Number);
+
+  return (
+    parsedDate.getUTCFullYear() === year &&
+    parsedDate.getUTCMonth() + 1 === month &&
+    parsedDate.getUTCDate() === day
+  );
+}
+
 app.get("/", (req, res) => {
     res.send("Internet Bank Transaction API");
 });
@@ -82,15 +102,17 @@ app.get("/transactions", (req, res): void => {
 app.post("/transactions", (req, res) => {
     const { date, recipient, amount } = req.body;
 
-    if (
-        typeof date !== "string" ||
-        typeof recipient !== "string" ||
-        typeof amount !== "number"
-    ) {
-        return res.status(400).json({
-            message: "Date, recipient and amount are required",
-        });
-    }
+if (
+    typeof date !== "string" ||
+    typeof recipient !== "string" ||
+    typeof amount !== "number" ||
+    !isValidDate(date)
+
+) {
+    return res.status(400).json({
+        message: "Date, recipient and amount are required",
+    });
+}
 
     const newId =
         transactions.length > 0
@@ -116,18 +138,45 @@ app.post("/transactions", (req, res) => {
 
 // Update transaction by ID
 app.put("/transactions/:id", (req, res): void => {
-    const transactionId: number = parseInt(req.params.id);
-    const transaction = transactions.find((t) => t.id === transactionId);
+const transactionId: number = Number(req.params.id);
+
+if (Number.isNaN(transactionId)) {
+    res.status(400).json({ message: "Transaction ID must be a number" });
+    return;
+}
+
+const transaction = transactions.find((t) => t.id === transactionId);
 
     if (!transaction) {
         res.status(404).json({ message: "Transaction not found" });
         return;
     }
 
-    if (req.body.amount !== undefined && typeof req.body.amount !== "number") {
-        res.status(400).json({ message: "Amount must be a number" });
-        return;
-    }
+    if (
+    req.body.date !== undefined &&
+    (typeof req.body.date !== "string" || !isValidDate(req.body.date))
+) {
+    res.status(400).json({ message: "Date must be a valid date" });
+    return;
+}
+
+if (
+    req.body.recipient !== undefined &&
+    (typeof req.body.recipient !== "string" ||
+        req.body.recipient.trim() === "")
+) {
+    res.status(400).json({ message: "Recipient must be a non-empty string" });
+    return;
+}
+
+if (
+    req.body.amount !== undefined &&
+    (typeof req.body.amount !== "number" ||
+        !Number.isFinite(req.body.amount))
+) {
+    res.status(400).json({ message: "Amount must be a finite number" });
+    return;
+}
 
     transaction.date = req.body.date || transaction.date;
     transaction.recipient = req.body.recipient || transaction.recipient;
