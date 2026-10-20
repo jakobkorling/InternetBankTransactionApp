@@ -1,10 +1,6 @@
 import express from "express";
-import {
-    transactions,
-    findClassification,
-    classificationsData
-} from "./data.js";
-import type { Transaction } from "./data.js";
+import { classificationsData } from "./data.js";
+import { pool } from "./db.js";
 
 
 const app = express();
@@ -37,7 +33,7 @@ app.get("/", (req, res) => {
 });
 
 // Get one transaction by ID
-app.get("/transactions/:id", (req, res) => {
+app.get("/transactions/:id", async (req, res) => {
     const id = Number(req.params.id);
 
     if (Number.isNaN(id)) {
@@ -46,181 +42,244 @@ app.get("/transactions/:id", (req, res) => {
         });
     }
 
-    const transaction = transactions.find((transaction) => transaction.id === id);
+    try {
+        const result = await pool.query(
+            `SELECT
+                id,
+                TO_CHAR(date, 'YYYY-MM-DD') AS date,
+                recipient,
+                amount::float AS amount
+            FROM transactions
+            WHERE id = $1`,
+            [id]
+        );
 
-    if (!transaction) {
-        return res.status(404).json({
-            error: "Transaction not found"
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                error: "Transaction not found"
+            });
+        }
+
+        return res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            error: "Database error"
         });
     }
-
-    return res.status(200).json(transaction);
 });
 
 // Get all transactions
-app.get("/transactions", (req, res): void => {
+app.get("/transactions", async (req, res) => {
     const { start, end } = req.query;
-    let result = transactions;
 
-    if (start || end) {
-        const startDate = new Date(start as string);
-        const endDate = new Date(end as string);
+    try {
+        let result;
 
-        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-            res.status(400).json({ message: "Invalid date format" });
-            return;
+        if (start || end) {
+            const startDate = new Date(start as string);
+            const endDate = new Date(end as string);
+
+            if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                return res.status(400).json({
+                    message: "Invalid date format"
+                });
+            }
+
+            if (startDate > endDate) {
+                return res.status(400).json({
+                    message: "Start date must be before end date!"
+                });
+            }
+
+            result = await pool.query(
+                `SELECT
+                    id,
+                    TO_CHAR(date, 'YYYY-MM-DD') AS date,
+                    recipient,
+                    amount::float AS amount
+                FROM transactions
+                WHERE date >= $1 AND date <= $2
+                ORDER BY id`,
+                [start, end]
+            );
+        } else {
+            result = await pool.query(
+                `SELECT
+                    id,
+                    TO_CHAR(date, 'YYYY-MM-DD') AS date,
+                    recipient,
+                    amount::float AS amount
+                FROM transactions
+                ORDER BY id`
+            );
         }
 
-        if (startDate > endDate) {
-            res.status(400).json({
-                message: "Start date must be before end date!"
-            });
-            return;
-        }
+        return res.status(200).json(result.rows);
 
-        result = transactions.filter((t) => {
-            const transactionDate = new Date(t.date);
-            return transactionDate >= startDate && transactionDate <= endDate;
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Database error"
         });
     }
-
-    const withClassification = result.map((t) => {
-        if (t.amount < 0) {
-            return {
-                ...t,
-                classification: findClassification(t.recipient)
-            };
-        }
-
-        return t;
-    });
-
-    res.status(200).json(withClassification);
 });
 
 // Create transaction
-app.post("/transactions", (req, res) => {
+app.post("/transactions", async (req, res) => {
     const { date, recipient, amount } = req.body;
 
-if (
-    typeof date !== "string" ||
-    typeof recipient !== "string" ||
-    typeof amount !== "number" ||
-    !isValidDate(date)
-
-) {
-    return res.status(400).json({
-        message: "Date, recipient and amount are required",
-    });
-}
-
-    const newId =
-        transactions.length > 0
-            ? Math.max(...transactions.map((t) => t.id)) + 1
-            : 1;
-
-    const newTransaction: Transaction = {
-        id: newId,
-        date,
-        recipient,
-        amount,
-    };
-
-    if (amount < 0) {
-        newTransaction.classification =
-            findClassification(recipient) as NonNullable<Transaction["classification"]>;
+    if (
+        typeof date !== "string" ||
+        typeof recipient !== "string" ||
+        typeof amount !== "number" ||
+        !isValidDate(date)
+    ) {
+        return res.status(400).json({
+            message: "Date, recipient and amount are required",
+        });
     }
 
-    transactions.push(newTransaction);
+    try {
+        const result = await pool.query(
+            `INSERT INTO transactions (date, recipient, amount)
+            VALUES ($1, $2, $3)
+            RETURNING
+                id,
+                TO_CHAR(date, 'YYYY-MM-DD') AS date,
+                recipient,
+                amount::float AS amount`,
+            [date, recipient, amount]
+        );
 
-    res.status(201).json(newTransaction);
+        return res.status(201).json(result.rows[0]);
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Database error"
+        });
+    }
 });
 
 // Update transaction by ID
-app.put("/transactions/:id", (req, res): void => {
-const transactionId: number = Number(req.params.id);
-
-if (Number.isNaN(transactionId)) {
-    res.status(400).json({ message: "Transaction ID must be a number" });
-    return;
-}
-
-const transaction = transactions.find((t) => t.id === transactionId);
-
-    if (!transaction) {
-        res.status(404).json({ message: "Transaction not found" });
-        return;
-    }
-
-    if (
-    req.body.date !== undefined &&
-    (typeof req.body.date !== "string" || !isValidDate(req.body.date))
-) {
-    res.status(400).json({ message: "Date must be a valid date" });
-    return;
-}
-
-if (
-    req.body.recipient !== undefined &&
-    (typeof req.body.recipient !== "string" ||
-        req.body.recipient.trim() === "")
-) {
-    res.status(400).json({ message: "Recipient must be a non-empty string" });
-    return;
-}
-
-if (
-    req.body.amount !== undefined &&
-    (typeof req.body.amount !== "number" ||
-        !Number.isFinite(req.body.amount))
-) {
-    res.status(400).json({ message: "Amount must be a finite number" });
-    return;
-}
-
-    transaction.date = req.body.date || transaction.date;
-    transaction.recipient = req.body.recipient || transaction.recipient;
-    transaction.amount = req.body.amount ?? transaction.amount;
-
-    if (transaction.amount < 0) {
-        transaction.classification = findClassification(transaction.recipient);
-    } else {
-        transaction.classification = undefined;
-    }
-
-    res.status(200).json({
-        message: "Transaction updated successfully",
-        transaction
-    });
-});
-
-// Delete transaction by ID
-app.delete("/transactions/:id", (req, res): void => {
+app.put("/transactions/:id", async (req, res) => {
     const transactionId = Number(req.params.id);
 
     if (Number.isNaN(transactionId)) {
-        res.status(400).json({
+        return res.status(400).json({
             message: "Transaction ID must be a number"
         });
-        return;
     }
 
-    const transactionIndex = transactions.findIndex(
-        (transaction) => transaction.id === transactionId
-    );
-
-    if (transactionIndex === -1) {
-        res.status(404).json({
-            message: "Transaction not found"
+    if (
+        req.body.date !== undefined &&
+        (typeof req.body.date !== "string" || !isValidDate(req.body.date))
+    ) {
+        return res.status(400).json({
+            message: "Date must be a valid date"
         });
-        return;
     }
 
-    transactions.splice(transactionIndex, 1);
+    if (
+        req.body.recipient !== undefined &&
+        (typeof req.body.recipient !== "string" ||
+            req.body.recipient.trim() === "")
+    ) {
+        return res.status(400).json({
+            message: "Recipient must be a non-empty string"
+        });
+    }
 
-    res.status(200).json({
-        message: "Transaction deleted successfully"
-    });
+    if (
+        req.body.amount !== undefined &&
+        (typeof req.body.amount !== "number" ||
+            !Number.isFinite(req.body.amount))
+    ) {
+        return res.status(400).json({
+            message: "Amount must be a finite number"
+        });
+    }
+
+    try {
+        const result = await pool.query(
+            `UPDATE transactions
+            SET
+                date = COALESCE($1, date),
+                recipient = COALESCE($2, recipient),
+                amount = COALESCE($3, amount)
+            WHERE id = $4
+            RETURNING
+                id,
+                TO_CHAR(date, 'YYYY-MM-DD') AS date,
+                recipient,
+                amount::float AS amount`,
+            [
+                req.body.date ?? null,
+                req.body.recipient ?? null,
+                req.body.amount ?? null,
+                transactionId
+            ]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                message: "Transaction not found"
+            });
+        }
+
+        return res.status(200).json({
+            message: "Transaction updated successfully",
+            transaction: result.rows[0]
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Database error"
+        });
+    }
+});
+
+// Delete transaction by ID
+app.delete("/transactions/:id", async (req, res) => {
+    const transactionId = Number(req.params.id);
+
+    if (Number.isNaN(transactionId)) {
+        return res.status(400).json({
+            message: "Transaction ID must be a number"
+        });
+    }
+
+    try {
+        const result = await pool.query(
+            `DELETE FROM transactions
+            WHERE id = $1
+            RETURNING id`,
+            [transactionId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                message: "Transaction not found"
+            });
+        }
+
+        return res.status(200).json({
+            message: "Transaction deleted successfully"
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Database error"
+        });
+    }
 });
 
 app.get("/classifications", (req, res) => {
