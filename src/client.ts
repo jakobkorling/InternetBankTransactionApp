@@ -76,7 +76,7 @@ async function viewTransactions() {
         const transactions = await response.json();
 
         console.log(transactions);
-    } catch (error) {
+    } catch {
         console.log("Could not connect to the API");
     }
 }
@@ -97,7 +97,7 @@ async function viewOneTransaction() {
         }
 
         console.log(data);
-    } catch (error) {
+    } catch {
         console.log("Could not connect to the API");
     }
 }
@@ -140,7 +140,7 @@ async function addTransaction() {
         console.log("Transaction created:");
         console.log(data);
 
-    } catch (error) {
+    } catch {
         console.log("Could not connect to the API");
     }
 }
@@ -187,7 +187,7 @@ async function updateTransaction() {
         console.log("Transaction updated:");
         console.log(data);
 
-    } catch (error) {
+    } catch {
         console.log("Could not connect to the API");
     }
 }
@@ -211,7 +211,7 @@ async function deleteTransaction() {
 
         console.log(data.message);
 
-    } catch (error) {
+    } catch {
         console.log("Could not connect to the API");
     }
 }
@@ -240,7 +240,7 @@ async function filterTransactionsByDate() {
         console.log("Filtered transactions:");
         console.log(data);
 
-    } catch (error) {
+    } catch {
         console.log("Could not connect to the API");
     }
 }
