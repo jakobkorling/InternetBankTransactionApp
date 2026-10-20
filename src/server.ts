@@ -1,32 +1,18 @@
 import express from "express";
 import { classificationsData } from "./data.js";
 import { pool } from "./db.js";
-
+import {
+    idParamSchema,
+    createTransactionSchema,
+    updateTransactionSchema,
+    dateFilterQuerySchema,
+    formatZodError,
+} from "./schemas.js";
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
-
-function isValidDate(date: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return false;
-  }
-
-  const parsedDate = new Date(date);
-
-  if (isNaN(parsedDate.getTime())) {
-    return false;
-  }
-
-  const [year, month, day] = date.split("-").map(Number);
-
-  return (
-    parsedDate.getUTCFullYear() === year &&
-    parsedDate.getUTCMonth() + 1 === month &&
-    parsedDate.getUTCDate() === day
-  );
-}
 
 app.get("/", (req, res) => {
     res.send("Internet Bank Transaction API");
@@ -34,13 +20,15 @@ app.get("/", (req, res) => {
 
 // Get one transaction by ID
 app.get("/transactions/:id", async (req, res) => {
-    const id = Number(req.params.id);
+    const parsedId = idParamSchema.safeParse(req.params);
 
-    if (Number.isNaN(id)) {
+    if (!parsedId.success) {
         return res.status(400).json({
-            error: "Transaction ID must be a number"
+            error: formatZodError(parsedId.error)
         });
     }
+
+    const id = parsedId.data.id;
 
     try {
         const result = await pool.query(
@@ -72,27 +60,20 @@ app.get("/transactions/:id", async (req, res) => {
 
 // Get all transactions
 app.get("/transactions", async (req, res) => {
-    const { start, end } = req.query;
+    const parsedQuery = dateFilterQuerySchema.safeParse(req.query);
+
+    if (!parsedQuery.success) {
+        return res.status(400).json({
+            message: formatZodError(parsedQuery.error)
+        });
+    }
+
+    const { start, end } = parsedQuery.data;
 
     try {
         let result;
 
-        if (start || end) {
-            const startDate = new Date(start as string);
-            const endDate = new Date(end as string);
-
-            if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-                return res.status(400).json({
-                    message: "Invalid date format"
-                });
-            }
-
-            if (startDate > endDate) {
-                return res.status(400).json({
-                    message: "Start date must be before end date!"
-                });
-            }
-
+        if (start && end) {
             result = await pool.query(
                 `SELECT
                     id,
@@ -129,18 +110,15 @@ app.get("/transactions", async (req, res) => {
 
 // Create transaction
 app.post("/transactions", async (req, res) => {
-    const { date, recipient, amount } = req.body;
+    const parsedBody = createTransactionSchema.safeParse(req.body);
 
-    if (
-        typeof date !== "string" ||
-        typeof recipient !== "string" ||
-        typeof amount !== "number" ||
-        !isValidDate(date)
-    ) {
+    if (!parsedBody.success) {
         return res.status(400).json({
-            message: "Date, recipient and amount are required",
+            message: formatZodError(parsedBody.error)
         });
     }
+
+    const { date, recipient, amount } = parsedBody.data;
 
     try {
         const result = await pool.query(
@@ -167,42 +145,24 @@ app.post("/transactions", async (req, res) => {
 
 // Update transaction by ID
 app.put("/transactions/:id", async (req, res) => {
-    const transactionId = Number(req.params.id);
+    const parsedId = idParamSchema.safeParse(req.params);
 
-    if (Number.isNaN(transactionId)) {
+    if (!parsedId.success) {
         return res.status(400).json({
-            message: "Transaction ID must be a number"
+            message: formatZodError(parsedId.error)
         });
     }
 
-    if (
-        req.body.date !== undefined &&
-        (typeof req.body.date !== "string" || !isValidDate(req.body.date))
-    ) {
+    const parsedBody = updateTransactionSchema.safeParse(req.body);
+
+    if (!parsedBody.success) {
         return res.status(400).json({
-            message: "Date must be a valid date"
+            message: formatZodError(parsedBody.error)
         });
     }
 
-    if (
-        req.body.recipient !== undefined &&
-        (typeof req.body.recipient !== "string" ||
-            req.body.recipient.trim() === "")
-    ) {
-        return res.status(400).json({
-            message: "Recipient must be a non-empty string"
-        });
-    }
-
-    if (
-        req.body.amount !== undefined &&
-        (typeof req.body.amount !== "number" ||
-            !Number.isFinite(req.body.amount))
-    ) {
-        return res.status(400).json({
-            message: "Amount must be a finite number"
-        });
-    }
+    const transactionId = parsedId.data.id;
+    const body = parsedBody.data;
 
     try {
         const result = await pool.query(
@@ -218,9 +178,9 @@ app.put("/transactions/:id", async (req, res) => {
                 recipient,
                 amount::float AS amount`,
             [
-                req.body.date ?? null,
-                req.body.recipient ?? null,
-                req.body.amount ?? null,
+                body.date ?? null,
+                body.recipient ?? null,
+                body.amount ?? null,
                 transactionId
             ]
         );
@@ -247,13 +207,15 @@ app.put("/transactions/:id", async (req, res) => {
 
 // Delete transaction by ID
 app.delete("/transactions/:id", async (req, res) => {
-    const transactionId = Number(req.params.id);
+    const parsedId = idParamSchema.safeParse(req.params);
 
-    if (Number.isNaN(transactionId)) {
+    if (!parsedId.success) {
         return res.status(400).json({
-            message: "Transaction ID must be a number"
+            message: formatZodError(parsedId.error)
         });
     }
+
+    const transactionId = parsedId.data.id;
 
     try {
         const result = await pool.query(
