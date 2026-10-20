@@ -4,10 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "server": "tsx src/server.ts",
-  "client": "tsx src/client.ts",
-  "typecheck": "tsc --noEmit"
-},
+    "server": "tsx src/server.ts",
+    "client": "tsx src/client.ts",
+    "typecheck": "tsc --noEmit"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jakobkorling/InternetBankTransactionApp.git"
@@ -20,11 +20,14 @@
   "homepage": "https://github.com/jakobkorling/InternetBankTransactionApp#readme",
   "dependencies": {
     "@inquirer/prompts": "^8.7.2",
-    "express": "^5.2.1"
+    "dotenv": "^18.0.8",
+    "express": "^5.2.1",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
